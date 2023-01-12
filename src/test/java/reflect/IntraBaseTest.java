@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import soot.*;
+import soot.jimple.toolkits.callgraph.CHATransformer;
 import soot.options.Options;
 
 import java.util.Arrays;
@@ -49,6 +50,13 @@ public abstract class IntraBaseTest {
 
         // 加载所有类
         Scene.v().loadNecessaryClasses();
+
+        // 加载cg
+        enableCHACallGraph();
+    }
+
+    private static void enableCHACallGraph() {
+        CHATransformer.v().transform();
     }
 
     @Test
