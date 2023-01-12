@@ -1,3 +1,5 @@
+package untest;
+
 import java.lang.reflect.Method;
 
 public class UnknownMethodName {
@@ -12,20 +14,20 @@ public class UnknownMethodName {
 
     static void invokeNonArg(String name) throws Exception {
         Method nonArg = E.class.getMethod(name);
-        nonArg.invoke(null); // <E: void nonArg()>
+        nonArg.invoke(null); // <untest.E: void nonArg()>
     }
 
     static void invokeOneArg(String name, Class<?>[] paramTypes) throws Exception {
         Method oneArg = E.class.getMethod(name, paramTypes);
         E e = new E();
-        oneArg.invoke(e, e); // <E: void oneArg(D)>, <E: void oneArg(Object)>, <E: D oneArgRet(D)>
-                             // <D: void oneArg(E)>
+        oneArg.invoke(e, e); // <untest.E: void oneArg(untest.D)>, <untest.E: void oneArg(Object)>, <untest.E: untest.D oneArgRet(untest.D)>
+                             // <untest.D: void oneArg(untest.E)>
     }
 
     static D invokeOneArgRet(String name, Class<?>[] paramTypes) throws Exception {
         Method oneArg = E.class.getMethod(name, paramTypes);
         E e = new E();
-        D d = (D) oneArg.invoke(e, e); // <E: D oneArgRet(D)>
+        D d = (D) oneArg.invoke(e, e); // <untest.E: untest.D oneArgRet(untest.D)>
         return d;
     }
 
@@ -37,39 +39,39 @@ public class UnknownMethodName {
 class D {
 
     public void oneArg(D d) {
-        System.out.println("D.oneArg(D)");
+        System.out.println("untest.D.oneArg(untest.D)");
     }
 
     public void oneArg(E e) {
-        System.out.println("D.oneArg(E)");
+        System.out.println("untest.D.oneArg(untest.E)");
     }
 }
 
 class E extends D {
 
     static void packagePrivate() {
-        System.out.println("E.packagePrivate()");
+        System.out.println("untest.E.packagePrivate()");
     }
 
     public static void nonArg() {
-        System.out.println("E.nonArg()");
+        System.out.println("untest.E.nonArg()");
     }
 
     public void oneArg(Object o) {
-        System.out.println("E.oneArg(Object)");
+        System.out.println("untest.E.oneArg(Object)");
     }
 
     @Override
     public void oneArg(D d) {
-        System.out.println("E.oneArg(D)");
+        System.out.println("untest.E.oneArg(untest.D)");
     }
 
     public void oneArg(String s) {
-        System.out.println("E.oneArg(String)");
+        System.out.println("untest.E.oneArg(String)");
     }
 
     public D oneArgRet(D d) {
-        System.out.println("E.oneArgRet(D)");
+        System.out.println("untest.E.oneArgRet(untest.D)");
         return d;
     }
 }

@@ -1,3 +1,5 @@
+package untest;
+
 import java.lang.reflect.Method;
 
 public class DuplicateName {
@@ -13,20 +15,20 @@ public class DuplicateName {
     static void invokePrint(Class<?>[] paramTypes, Object[] args) throws Exception {
         Method print = C.class.getMethod("print", paramTypes);
         C c = new C();
-        print.invoke(c, args); // <C: void print(Object)>,
-                               // <C: void print(Object,Object)>,
-                               // <Parent: void print(Object,Object,Object)>
+        print.invoke(c, args); // <untest.C: void print(Object)>,
+                               // <untest.C: void print(Object,Object)>,
+                               // <untest.Parent: void print(Object,Object,Object)>
     }
 }
 
 class Parent {
 
     public void print(Object o) {
-        System.out.println("Parent.print(Object)");
+        System.out.println("untest.Parent.print(Object)");
     }
 
     public void print(Object o1, Object o2, Object o3) {
-        System.out.println("Parent.print(Object,Object,Object)");
+        System.out.println("untest.Parent.print(Object,Object,Object)");
     }
 }
 
@@ -34,14 +36,14 @@ class C extends Parent {
 
     @Override
     public void print(Object o) {
-        System.out.println("C.print(Object)");
+        System.out.println("untest.C.print(Object)");
     }
 
     public void print(Object o1, Object o2) {
-        System.out.println("C.print(Object,Object)");
+        System.out.println("untest.C.print(Object,Object)");
     }
 
     void print(Object o1, Object o2, Object o3, Object o4) {
-        System.out.println("C.print(Object,Object,Object,Object)");
+        System.out.println("untest.C.print(Object,Object,Object,Object)");
     }
 }

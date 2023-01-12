@@ -1,3 +1,5 @@
+package untest;
+
 import java.lang.reflect.Method;
 
 public class ArgsRefine {
@@ -10,25 +12,25 @@ public class ArgsRefine {
         Method print = B.class.getMethod("print", paramTypes);
         B b = new B();
         Object[] args = new Object[]{"hello", "hello"};
-        print.invoke(b, args); // <B: void print(Object,Object)>
+        print.invoke(b, args); // <untest.B: void print(Object,Object)>
     }
 }
 
 class B {
 
     public void print(Object o) {
-        System.out.println("B.print(Object)");
+        System.out.println("untest.B.print(Object)");
     }
 
     public void print(Object o1, Object o2) {
-        System.out.println("B.print(Object,Object)");
+        System.out.println("untest.B.print(Object,Object)");
     }
 
     public void print(Object o, B b) {
-        System.out.println("B.print(Object,B)");
+        System.out.println("untest.B.print(Object,untest.B)");
     }
 
     public void print(Object o1, Object o2, Object o3) {
-        System.out.println("B.print(Object,Object,Object)");
+        System.out.println("untest.B.print(Object,Object,Object)");
     }
 }
