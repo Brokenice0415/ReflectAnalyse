@@ -4,10 +4,13 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import soot.*;
+import soot.jimple.spark.SparkTransformer;
 import soot.jimple.toolkits.callgraph.CHATransformer;
 import soot.options.Options;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -27,8 +30,7 @@ public abstract class IntraBaseTest {
         return Arrays.asList("reflect.*");
     }
 
-    @Before
-    public void initializeSoot() {
+    public void setOptions() {
         // 加载JDK到class path中
         Options.v().set_whole_program(true);
         // 容错
@@ -48,16 +50,30 @@ public abstract class IntraBaseTest {
         // 输出Jimple IR文件到sootOutput目录中，方便调试查看
         Options.v().set_output_format(Options.output_format_jimple);
 
+    }
+
+    @Before
+    public void initializeSoot() {
+        setOptions();
         // 加载所有类
         Scene.v().loadNecessaryClasses();
-
-        // 加载cg
-        enableCHACallGraph();
     }
 
-    private static void enableCHACallGraph() {
-        CHATransformer.v().transform();
-    }
+
+//    private static void enableSparkCallGraph() {
+//
+//        //Enable Spark
+//        HashMap<String,String> opt = new HashMap<String,String>();
+//        //opt.put("propagator","worklist");
+//        //opt.put("simple-edges-bidirectional","false");
+//        opt.put("on-fly-cg","true");
+//        //opt.put("set-impl","double");
+//        //opt.put("double-set-old","hybrid");
+//        //opt.put("double-set-new","hybrid");
+//        //opt.put("pre_jimplify", "true");
+//        SparkTransformer.v().transform("",opt);
+//        PhaseOptions.v().setPhaseOption("cg.spark", "enabled:true");
+//    }
 
     @Test
     public void test() {
