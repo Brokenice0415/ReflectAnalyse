@@ -50,6 +50,8 @@ public class Method {
         // 避免重复生成对象
         localMap = new HashMap<>();
 
+        if (delegate == null) return;
+
         for (Unit unit : delegate.retrieveActiveBody().getUnits()) {
             Stmt stmt = (Stmt) unit;
             if (stmt instanceof AssignStmt) {
@@ -118,7 +120,13 @@ public class Method {
                     }
                 } else if (invokeExpr instanceof StaticInvokeExpr) {
                     // ClassName.k(arg, ...)   : static call
-                    callSite = new CallSite(stmt);
+                    if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+                        // r = ClassName.k(arg, ...)
+                        Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+                        callSite = new CallSite(stmt, null, r);
+                    } else {
+                        callSite = new CallSite(stmt);
+                    }
                 }
 
                 Call call = new Call(callSite);
@@ -146,6 +154,7 @@ public class Method {
 
     public List<Variable> getRetVariable() {
         List<Variable> variableList = new LinkedList<>();
+        if (delegate == null) return variableList;
         for (Unit unit : delegate.getActiveBody().getUnits()) {
             if (unit instanceof ReturnStmt) {
                 ReturnStmt returnStmt = (ReturnStmt) unit;
@@ -160,6 +169,7 @@ public class Method {
 
     public List<Variable> getParams() {
         List<Variable> variableList = new LinkedList<>();
+        if (delegate == null) return variableList;
         List<Local> locals = delegate.getActiveBody().getParameterLocals();
         for (Local local : locals) {
             Variable variable = getVariable(local);
@@ -169,6 +179,7 @@ public class Method {
     }
 
     public Variable getThisVariable() {
+        if (delegate == null) return null;
         Local thisLocal = delegate.getActiveBody().getThisLocal();
         return getVariable(thisLocal);
     }

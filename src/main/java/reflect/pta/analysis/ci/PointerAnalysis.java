@@ -11,6 +11,7 @@ import soot.toolkits.scalar.Pair;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Created by liture on 2021/9/20 11:11 下午
@@ -87,11 +88,11 @@ public class PointerAnalysis {
             Var x = (Var) n;
 
             for (Obj o: delta) {
-                // x.f = y
-                processInstanceStore(x, o);
-
-                // y = x.f
-                processInstanceLoad(x, o);
+//                // x.f = y
+//                processInstanceStore(x, o);
+//
+//                // y = x.f
+//                processInstanceLoad(x, o);
 
                 // ProcessCall(x, o_i)
                 processCall(x, o);
@@ -219,20 +220,38 @@ public class PointerAnalysis {
                     CallSite callSite = call.getCallSite();
                     StaticInvokeExpr staticCall = (StaticInvokeExpr) callSite.getCallSite().getInvokeExpr();
 
-                    // 被调用函数 (不需要Dispatch, 静态可知)
-                    SootMethod calleeSootMethod = staticCall.getMethod();
-                    Method calleeMethod = null;
-                    for (Method mm : RM) {
-                        if (mm.getSootMethod() == calleeSootMethod) {
-                            calleeMethod = mm;
-                            break;
+                    String invokeName = staticCall.toString();
+                    if (Pattern.matches(".*<java\\.lang\\.Class: java\\.lang\\.Class forName\\(java\\.lang\\.String\\)>.*", invokeName)) {
+                        assert staticCall.getArgCount() == 1;
+                        if (staticCall.getArg(0) instanceof StringConstant) {
+                            // 需要常量传播
+                            StringConstant str = (StringConstant) staticCall.getArg(0);
+                            String classType = str.value;
+
+                            Allocation allocation = new Allocation(call.getCallSite().getRet(), classType);
+
+                            // o_i
+                            Obj o = heapModel.getObj(allocation.getAllocationSite(), classType, m);
+                            // <x, o_i>
+                            WL.addPointerEntry(PFG.getVar(call.getCallSite().getRet()), PointsToSet.singleton(o));
                         }
                     }
-                    if (calleeMethod == null) {
-                        calleeMethod = new Method(calleeSootMethod);
-                    }
+                    else { // normal static method
+                        // 被调用函数 (不需要Dispatch, 静态可知)
+                        SootMethod calleeSootMethod = staticCall.getMethod();
+                        Method calleeMethod = null;
+                        for (Method mm : RM) {
+                            if (mm.getSootMethod() == calleeSootMethod) {
+                                calleeMethod = mm;
+                                break;
+                            }
+                        }
+                        if (calleeMethod == null) {
+                            calleeMethod = new Method(calleeSootMethod);
+                        }
 
-                    processCallLink(m, calleeMethod, callSite);
+                        processCallLink(m, calleeMethod, callSite);
+                    }
                 });
     }
 
@@ -325,6 +344,7 @@ public class PointerAnalysis {
      * @param o
      */
     protected void processCall(Var var, Obj o) {
+        if (var.getVariable() == null) return;
         Method curMethod = var.getVariable().getMethod();
 
         Set<Call> calls = var.getVariable().getCalls();
@@ -370,11 +390,14 @@ public class PointerAnalysis {
     }
 
     protected Method dispatch(Obj o, CallSite callSite) {
-        AssignStmt assignStmt = (AssignStmt) o.getAllocSite();
-        NewExpr newExpr = (NewExpr) assignStmt.getRightOp();
-        RefType refType = (RefType) newExpr.getType();
-
-        SootClass sootClass = refType.getSootClass();
+        SootClass sootClass;
+        if (o.getAllocSite() instanceof AssignStmt) {
+            NewExpr newExpr = (NewExpr) ((AssignStmt) o.getAllocSite()).getRightOp();
+            RefType refType = (RefType) newExpr.getType();
+            sootClass = refType.getSootClass();
+        } else {
+            sootClass = new SootClass((String) o.getAllocSite());
+        }
 
         InvokeExpr invokeExpr = callSite.getCallSite().getInvokeExpr();
         SootMethod sootMethod = invokeExpr.getMethod();
@@ -395,7 +418,7 @@ public class PointerAnalysis {
     }
 
     /**
-     * @see ass3.CHACallGraphBuilder
+     * @see reflect.cha.CHACallGraphBuilder
      */
     private SootMethod dispatch(SootClass sootClass, SootMethod method) {
         for (SootMethod m : sootClass.getMethods()) {

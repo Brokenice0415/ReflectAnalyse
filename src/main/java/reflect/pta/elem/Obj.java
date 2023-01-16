@@ -52,13 +52,24 @@ public class Obj {
 
     @Override
     public String toString() {
-        AssignStmt assignStmt = (AssignStmt) allocSite;
-        StringBuilder buff = new StringBuilder();
-        buff.append(method.getSootMethod().getSignature());
-        buff.append("@");
-        buff.append(assignStmt.getTag(LineNumberTag.IDENTIFIER));
-        buff.append(": ");
-        buff.append(assignStmt);
-        return buff.toString();
+        if (allocSite instanceof AssignStmt) {
+            AssignStmt assignStmt = (AssignStmt) allocSite;
+            StringBuilder buff = new StringBuilder();
+            buff.append(method.getSootMethod().getSignature());
+            buff.append("@");
+            buff.append(assignStmt.getTag(LineNumberTag.IDENTIFIER));
+            buff.append(": ");
+            buff.append(assignStmt);
+            return buff.toString();
+        }
+        else {
+            StringBuilder buff = new StringBuilder();
+            buff.append(method.getSootMethod().getSignature());
+            buff.append("@");
+            buff.append(allocSite);
+            buff.append(": ");
+            buff.append(allocSite);
+            return buff.toString();
+        }
     }
 }

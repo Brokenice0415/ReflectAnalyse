@@ -30,6 +30,7 @@ public class PointerAnalysisTransformer extends SceneTransformer {
             pointerSet.addAll(PFG.instanceFieldMap.values());
             for (Pointer pointer : pointerSet) {
                 StringBuilder buff = new StringBuilder();
+                if (((Var)pointer).getVariable() == null) continue;
                 buff.append(pointer).append("\n");
                 buff.append("\t pts: ").append(pointer.getPointsToSet()).append("\n");
                 buff.append("\t edges: ").append(PFG.getSuccessorOf(pointer)).append("\n");

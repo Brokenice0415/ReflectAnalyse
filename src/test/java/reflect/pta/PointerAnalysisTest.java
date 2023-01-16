@@ -21,6 +21,7 @@ public class PointerAnalysisTest extends InterBaseTest {
     @Override
     public List<String> getExcluded() {
         List<String> excluded = new LinkedList<>(super.getExcluded());
+        excluded.add("untest.*");
         return excluded;
     }
 
