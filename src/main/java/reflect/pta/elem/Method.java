@@ -1,14 +1,14 @@
 package reflect.pta.elem;
 
+import reflect.pta.analysis.ci.PointsToSet;
 import reflect.pta.stmt.*;
-import soot.Local;
-import soot.SootMethod;
-import soot.Unit;
-import soot.Value;
+import soot.*;
 import soot.jimple.*;
+import soot.jimple.internal.*;
 import soot.tagkit.LineNumberTag;
 import soot.tagkit.Tag;
 import java.util.*;
+import java.util.regex.Pattern;
 
 /**
  * Created by liture on 2021/9/20 11:07 下午
@@ -22,6 +22,10 @@ public class Method {
     private Set<Statement> pointerAffectingStmt;
 
     private Map<Value, Variable> localMap;
+
+    private Map<Variable, ForName> forNameMap;
+
+    private Map<Variable, GetMethod> methodMap;
 
     public Method(SootMethod sootMethod) {
         this.delegate = sootMethod;
@@ -50,6 +54,9 @@ public class Method {
         // 避免重复生成对象
         localMap = new HashMap<>();
 
+        forNameMap = new HashMap<>();
+        methodMap = new HashMap<>();
+
         if (delegate == null) return;
 
         for (Unit unit : delegate.retrieveActiveBody().getUnits()) {
@@ -58,22 +65,23 @@ public class Method {
                 AssignStmt assignStmt = (AssignStmt) stmt;
                 Value l = assignStmt.getLeftOp();
                 Value r = assignStmt.getRightOp();
+                Variable ret = getVariable((Local) l);
                 // x = new T
                 if (l instanceof Local && r instanceof NewExpr) {
-                    Variable x = getVariable((Local) l);
+                    Variable x = ret;
                     Allocation alloc = new Allocation(x, assignStmt);
                     addPointerAffectingStmt(stmt, alloc);
                 }
                 // x = y
                 if (l instanceof Local && r instanceof Local) {
-                    Variable x = getVariable((Local) l);
+                    Variable x = ret;
                     Variable y = getVariable((Local) r);
                     Assign assign = new Assign(y, x);
                     addPointerAffectingStmt(stmt, assign);
                 }
                 // y = x.f
                 if (l instanceof Local && r instanceof InstanceFieldRef) {
-                    Variable y = getVariable((Local) l);
+                    Variable y = ret;
                     Variable x = getVariable((Local) ((InstanceFieldRef) r).getBase());
                     Field f = new Field((InstanceFieldRef) r);
                     InstanceLoad load = new InstanceLoad(y, x, f);
@@ -109,23 +117,138 @@ public class Method {
 
                 InvokeExpr invokeExpr = stmt.getInvokeExpr();
                 if (invokeExpr instanceof InstanceInvokeExpr) {
+
                     x = getVariable((Local) ((InstanceInvokeExpr) invokeExpr).getBase());
-                    if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
-                        // r = x.k(arg, ...)
-                        Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
-                        callSite = new CallSite(stmt, x, r);
-                    } else {
-                        // x.k(arg, ...)
-                        callSite = new CallSite(stmt, x);
+
+                    if (Pattern.matches(".*<java\\.lang\\.Class: java\\.lang\\.reflect\\.Method getMethod\\(java\\.lang\\.String,java\\.lang\\.Class\\[\\]\\)>.*", invokeExpr.toString())) {
+                        if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+                            // r = x.k(arg, ...)
+                            Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+
+//                            System.out.println(r.toString() + " = " + x.toString() + "." + invokeExpr.getArg(0));
+
+                            if (forNameMap.containsKey(x)) {
+                                ForName forName = forNameMap.get(x);
+                                SootMethod reflectMethod = forName.getSootMethod(invokeExpr.getArg(0).toString());
+                                if (reflectMethod != null) {
+                                    if (reflectMethod.isStatic()) {
+                                        methodMap.put(r, new GetMethod(
+                                                reflectMethod,
+                                                forName.getSootClass(),
+                                                (Local) ((AssignStmt) stmt).getLeftOp(),
+                                                new JStaticInvokeExpr(reflectMethod.makeRef(), new ArrayList<>()),
+                                                ((InstanceInvokeExpr) invokeExpr).getBase()
+                                        ));
+                                    }
+                                    else {
+                                        methodMap.put(r, new GetMethod(
+                                                reflectMethod,
+                                                forName.getSootClass(),
+                                                (Local) ((AssignStmt) stmt).getLeftOp(),
+                                                new JSpecialInvokeExpr((Local)((InstanceInvokeExpr) invokeExpr).getBase(), reflectMethod.makeRef(), new ArrayList<>()),
+                                                ((InstanceInvokeExpr) invokeExpr).getBase()
+                                        ));
+                                    }
+                                }
+
+
+//                                System.out.println(r + " = " + methodMap.get(r).getInvokeStmt());
+                            }
+                            callSite = new CallSite(stmt, x, r);
+                        }
+                        else {
+                            callSite = new CallSite(stmt, x);
+                        }
+                    }
+//                    else if (Pattern.matches(".*<java\\.lang\\.reflect\\.Method: java\\.lang\\.Object invoke\\(java\\.lang\\.Object,java\\.lang\\.Object\\[\\]\\)>.*", invokeExpr.toString())) {
+//
+//                        GetMethod getMethod = getReflectMethod(x);
+//
+//                        if (getMethod == null) {
+//                            if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+//                                // r = x.k(arg, ...)
+//                                Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+//                                callSite = new CallSite(stmt, x, r);
+//                            } else {
+//                                // x.k(arg, ...)
+//                                callSite = new CallSite(stmt, x);
+//                            }
+//                        }
+//                        else {
+//
+//                            Variable x1 = getVariable(getMethod.getBase());
+//
+//                            if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+//                                // r = x.k(arg, ...)
+//                                Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+//                                // TODO: x = ?
+//
+//                                AssignStmt assignStmt = new JAssignStmt(
+//                                        ((AssignStmt) stmt).getLeftOp(),
+//                                        getMethod.getinvoke()
+//                                );
+//
+//                                callSite = new CallSite(assignStmt, x1, r);
+//
+//                                addPointerAffectingStmt(assignStmt, new Call(callSite));
+//
+//                                callSite = new CallSite(stmt, x1, r);
+//                            } else {
+//                                // x.k(arg, ...)
+//
+//                                InvokeStmt invokeStmt = new JInvokeStmt(getMethod.getinvoke());
+//
+////                                System.out.println(invokeStmt);
+//
+//                                callSite = new CallSite(invokeStmt, x1);
+//
+//                                addPointerAffectingStmt(invokeStmt, new Call(callSite));
+//
+//                                callSite = new CallSite(stmt, x1);
+//                            }
+//
+//                        }
+//                    }
+                    else {
+                        if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+                            // r = x.k(arg, ...)
+                            Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+                            callSite = new CallSite(stmt, x, r);
+                        } else {
+                            // x.k(arg, ...)
+                            callSite = new CallSite(stmt, x);
+                        }
                     }
                 } else if (invokeExpr instanceof StaticInvokeExpr) {
                     // ClassName.k(arg, ...)   : static call
-                    if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+
+                    String invokeName = invokeExpr.toString();
+                    if (Pattern.matches(".*<java\\.lang\\.Class: java\\.lang\\.Class forName\\(java\\.lang\\.String\\)>.*", invokeName)) {
                         // r = ClassName.k(arg, ...)
-                        Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
-                        callSite = new CallSite(stmt, null, r);
-                    } else {
-                        callSite = new CallSite(stmt);
+                        if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+                            Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+//                            assert invokeExpr.getArgCount() == 1;
+                            if (invokeExpr.getArg(0) instanceof StringConstant) {
+                                // 需要常量传播
+                                StringConstant str = (StringConstant) invokeExpr.getArg(0);
+                                String className = str.value;
+
+                                forNameMap.put(r, new ForName(className));
+                            }
+                            callSite = new CallSite(stmt, null, r);
+                        }
+                        else {
+                            callSite = new CallSite(stmt);
+                        }
+                    }
+                    else {
+                        if (stmt instanceof AssignStmt && ((AssignStmt) stmt).getLeftOp() instanceof Local) {
+                            // r = ClassName.k(arg, ...)
+                            Variable r = getVariable((Local) ((AssignStmt) stmt).getLeftOp());
+                            callSite = new CallSite(stmt, null, r);
+                        } else {
+                            callSite = new CallSite(stmt);
+                        }
                     }
                 }
 
@@ -136,6 +259,17 @@ public class Method {
                 addPointerAffectingStmt(stmt, call);
             }
         }
+//        for (Value v: localMap.keySet()) {
+//            StringBuilder buff = new StringBuilder();
+//            buff.append(
+//                    ">>" + v + ": \n"
+//            );
+//            for (Call call: getVariable(v).getCalls()) {
+//                buff.append(call + "\n");
+//            }
+//            buff.append("======");
+//            System.out.println(buff);
+//        }
     }
 
     private void addPointerAffectingStmt(Stmt stmt, Statement ir) {
@@ -194,6 +328,14 @@ public class Method {
 
     public SootMethod getSootMethod() {
         return delegate;
+    }
+
+    public GetMethod getReflectMethod(Variable var) {
+        return methodMap.get(var);
+    }
+
+    public SootClass getReflectClass(Variable var) {
+        return forNameMap.get(var).getSootClass();
     }
 
     @Override
