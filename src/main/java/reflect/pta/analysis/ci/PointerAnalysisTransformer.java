@@ -1,6 +1,11 @@
 package reflect.pta.analysis.ci;
 
+import reflect.cha.CallEdge;
+import reflect.cha.JimpleCallGraph;
 import soot.*;
+import soot.jimple.toolkits.callgraph.CallGraph;
+import soot.jimple.toolkits.callgraph.Edge;
+
 import java.util.*;
 
 /**
@@ -37,6 +42,24 @@ public class PointerAnalysisTransformer extends SceneTransformer {
                 System.out.println(buff);
             }
             System.out.println("======== End of PFG ========\n");
+            JimpleCallGraph CG = pointerAnalysis.CG;
+            Queue<SootMethod> methodQueue = new LinkedList<>();
+            for (SootMethod entryMethod: CG.getEntryMethods()) {
+                methodQueue.offer(entryMethod);
+            }
+            while (!methodQueue.isEmpty()) {
+                SootMethod sm = methodQueue.poll();
+                StringBuilder buff = new StringBuilder();
+                buff.append(sm.getName());
+                buff.append("\n\tedges: \n");
+                for (CallEdge edge: CG.getCallOutOf(sm)) {
+                    if (edge.getCallee() != null) {
+                        methodQueue.offer(edge.getCallee());
+                        buff.append("\t->\t" + edge.getCallee() + "\n");
+                    }
+                }
+                System.out.println(buff);
+            }
         }
     }
 }
