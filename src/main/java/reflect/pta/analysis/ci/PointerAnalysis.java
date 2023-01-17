@@ -7,6 +7,8 @@ import reflect.pta.elem.*;
 import reflect.pta.stmt.*;
 import soot.*;
 import soot.jimple.*;
+import soot.jimple.internal.JAssignStmt;
+import soot.jimple.internal.JInvokeStmt;
 import soot.toolkits.scalar.Pair;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -109,6 +111,11 @@ public class PointerAnalysis {
             Set<Statement> S_m = m.getStatements();
             S.addAll(S_m);
 
+//            for (Statement st: S_m) {
+//                System.out.println(st.toString());
+//            }
+//            System.out.println("====");
+
             // foreach i: x = new T() \in S_m
             processAllocations(m);
 
@@ -117,6 +124,8 @@ public class PointerAnalysis {
 
             // foreach static call
             processStaticCall(m);
+
+            processInvoke(m);
         }
     }
 
@@ -221,18 +230,17 @@ public class PointerAnalysis {
                     StaticInvokeExpr staticCall = (StaticInvokeExpr) callSite.getCallSite().getInvokeExpr();
 
                     String invokeName = staticCall.toString();
+
                     if (Pattern.matches(".*<java\\.lang\\.Class: java\\.lang\\.Class forName\\(java\\.lang\\.String\\)>.*", invokeName)) {
                         assert staticCall.getArgCount() == 1;
                         if (staticCall.getArg(0) instanceof StringConstant) {
+                            // TODO
                             // 需要常量传播
                             StringConstant str = (StringConstant) staticCall.getArg(0);
                             String classType = str.value;
 
                             Allocation allocation = new Allocation(call.getCallSite().getRet(), classType);
-
-                            // o_i
                             Obj o = heapModel.getObj(allocation.getAllocationSite(), classType, m);
-                            // <x, o_i>
                             WL.addPointerEntry(PFG.getVar(call.getCallSite().getRet()), PointsToSet.singleton(o));
                         }
                     }
@@ -338,6 +346,79 @@ public class PointerAnalysis {
         }
     }
 
+    protected void processInvoke(final Method m) {
+        Set<Statement> S_m = m.getStatements();
+        S_m.stream()
+                .filter(s -> (s instanceof Call)
+                        &&Pattern.matches(".*<java\\.lang\\.reflect\\.Method: java\\.lang\\.Object invoke\\(java\\.lang\\.Object,java\\.lang\\.Object\\[\\]\\)>.*", s.toString()))
+                .forEach(s -> {
+                    System.out.println(s.toString());
+
+                    Call call = (Call) s;
+                    Variable x = call.getCallSite().getReceiver();
+                    GetMethod getMethod = m.getReflectMethod(x);
+
+                    if (getMethod != null) {
+
+//                        Variable x1 = m.getVariable(getMethod.getInvokeBase());
+//
+//                        Var var = PFG.getVar(x1);
+//
+//                        //TODO
+//
+//                        CallSite callSite;
+//
+//                        if (call instanceof AssignStmt && ((AssignStmt) call).getLeftOp() instanceof Local) {
+//                            // r = x.k(arg, ...)
+//                            Variable r = m.getVariable((Local) ((AssignStmt) call).getLeftOp());
+//                            // TODO: x = ?
+//                            AssignStmt assignStmt = new JAssignStmt(
+//                                    ((AssignStmt) call).getLeftOp(),
+//                                    getMethod.getinvoke()
+//                            );
+//                            callSite = new CallSite(assignStmt, x1, r);
+//
+//                        } else {
+//                            // x.k(arg, ...)
+//                            InvokeStmt invokeStmt = new JInvokeStmt(getMethod.getinvoke());
+//                            callSite = new CallSite(invokeStmt, x1);
+//                        }
+
+//                        for (Obj o: var.getPointsToSet()) {
+//                            Method dispatch = dispatch(o, callSite);
+//
+//                            System.out.println(dispatch);
+//
+//                            if (!CG.contains(call.getCallSite().getCallSite(), dispatch.getSootMethod())) {
+//                                // add l -> m to CG
+//                                CG.addEdge(call.getCallSite().getCallSite(), dispatch.getSootMethod(), CallKind.getCallKind(call.getCallSite().getCallSite()));
+//
+//                                WL.addPointerEntry(PFG.getVar(m.getThisVariable()), PointsToSet.singleton(o));
+//                            }
+//                        }
+
+                        SootMethod dm = dispatch(getMethod.getBaseClass(), getMethod.getSootMethod());
+//                        Method method = null;
+//                        for (Method mm : RM) {
+//                            if (mm.getSootMethod() == dm) {
+//                                method = mm;
+//                                break;
+//                            }
+//                        }
+//                        if (method == null) {
+//                            method = new Method(dm);
+//                        }
+
+                        if (!CG.contains(call.getCallSite().getCallSite(), dm)) {
+                            // add l -> m to CG
+                            CG.addEdge(call.getCallSite().getCallSite(), dm, CallKind.getCallKind(call.getCallSite().getCallSite()));
+                        }
+
+                    }
+            });
+    }
+
+
     /**
      * 处理函数调用，型如：l: r = var.k(a1, ..., an)
      * @param var
@@ -351,8 +432,10 @@ public class PointerAnalysis {
         for (Call call : calls) {
             // r = var.k(a1, ..., an)
             CallSite callSite = call.getCallSite();
+
             // m = Dispatch(o_i, k)
             Method m = dispatch(o, callSite);
+
             // add <m_this, {o_i}> to WL
             WL.addPointerEntry(PFG.getVar(m.getThisVariable()), PointsToSet.singleton(o));
 
