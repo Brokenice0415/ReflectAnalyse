@@ -65,23 +65,22 @@ public class Method {
                 AssignStmt assignStmt = (AssignStmt) stmt;
                 Value l = assignStmt.getLeftOp();
                 Value r = assignStmt.getRightOp();
-                Variable ret = getVariable((Local) l);
                 // x = new T
                 if (l instanceof Local && r instanceof NewExpr) {
-                    Variable x = ret;
+                    Variable x = getVariable((Local) l);
                     Allocation alloc = new Allocation(x, assignStmt);
                     addPointerAffectingStmt(stmt, alloc);
                 }
                 // x = y
                 if (l instanceof Local && r instanceof Local) {
-                    Variable x = ret;
+                    Variable x = getVariable((Local) l);
                     Variable y = getVariable((Local) r);
                     Assign assign = new Assign(y, x);
                     addPointerAffectingStmt(stmt, assign);
                 }
                 // y = x.f
                 if (l instanceof Local && r instanceof InstanceFieldRef) {
-                    Variable y = ret;
+                    Variable y = getVariable((Local) l);
                     Variable x = getVariable((Local) ((InstanceFieldRef) r).getBase());
                     Field f = new Field((InstanceFieldRef) r);
                     InstanceLoad load = new InstanceLoad(y, x, f);
