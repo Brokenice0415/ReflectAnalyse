@@ -43,6 +43,7 @@ public class PointerAnalysisTransformer extends SceneTransformer {
             }
             System.out.println("======== End of PFG ========\n");
             JimpleCallGraph CG = pointerAnalysis.CG;
+            Set<CallEdge> edgeSet = new HashSet<>();
             Queue<SootMethod> methodQueue = new LinkedList<>();
             for (SootMethod entryMethod: CG.getEntryMethods()) {
                 methodQueue.offer(entryMethod);
@@ -53,6 +54,7 @@ public class PointerAnalysisTransformer extends SceneTransformer {
                 buff.append(sm.getName());
                 buff.append("\n\tedges: \n");
                 for (CallEdge edge: CG.getCallOutOf(sm)) {
+                    if (!edgeSet.add(edge)) continue;
                     if (edge.getCallee() != null) {
                         methodQueue.offer(edge.getCallee());
                         buff.append("\t->\t" + edge.getCallee() + "\n");
