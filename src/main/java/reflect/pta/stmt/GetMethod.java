@@ -41,7 +41,7 @@ public class GetMethod extends Statement{
         return sootMethod;
     }
 
-    public Value getinvoke() {
+    public Value getInvoke() {
         return invoke;
     }
 
