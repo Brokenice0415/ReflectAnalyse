@@ -1,5 +1,6 @@
 package reflect.pta.analysis.ci;
 
+import reflect.cha.CallEdge;
 import reflect.cha.CallKind;
 import reflect.cha.JimpleCallGraph;
 import reflect.pta.analysis.HeapModel;
@@ -9,10 +10,10 @@ import soot.*;
 import soot.jimple.*;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JInvokeStmt;
+import soot.jimple.toolkits.callgraph.CallGraph;
 import soot.toolkits.scalar.Pair;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
+
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
@@ -43,6 +44,8 @@ public class PointerAnalysis {
 
     protected JimpleCallGraph CG;
 
+    protected Map<Call, Set<CallSite>> InvokeCallFrom;
+
     public PointerAnalysis(SootMethod entry) {
         this.sootMethod = entry;
         this.heapModel = HeapModel.v();
@@ -61,6 +64,8 @@ public class PointerAnalysis {
      * 初始化各种数据结构，entry methods
      */
     protected void initialize() {
+        InvokeCallFrom = new HashMap<>();
+
         WL = new WorkList();
         PFG = new PointerFlowGraph();
         S = new LinkedHashSet<>();
@@ -89,7 +94,7 @@ public class PointerAnalysis {
             // now, n represents a variable x
             Var x = (Var) n;
 
-            for (Obj o: delta) {
+            for (Obj o : delta) {
 //                // x.f = y
 //                processInstanceStore(x, o);
 //
@@ -349,75 +354,68 @@ public class PointerAnalysis {
     protected void processInvoke(final Method m) {
         Set<Statement> S_m = m.getStatements();
         S_m.stream()
-                .filter(s -> (s instanceof Call)
-                        &&Pattern.matches(".*<java\\.lang\\.reflect\\.Method: java\\.lang\\.Object invoke\\(java\\.lang\\.Object,java\\.lang\\.Object\\[\\]\\)>.*", s.toString()))
+                .filter(s -> Pattern.matches(".*<java\\.lang\\.reflect\\.Method: java\\.lang\\.Object invoke\\(java\\.lang\\.Object,java\\.lang\\.Object\\[\\]\\)>.*", s.toString()))
                 .forEach(s -> {
-                    System.out.println(s.toString());
-
+//                    System.out.println(s.toString());
+                    assert s instanceof Call;
                     Call call = (Call) s;
+
+                    Value instanceValue = call.getCallSite().getCallSite().getInvokeExpr().getArg(0);
+                    Variable instance = m.getVariable(instanceValue);
+                    Var instanceVar = PFG.getVar(instance);
+
+                    List<Value> paramsValues = call.getCallSite().getCallSite().getInvokeExpr().getArgs();
+                    paramsValues.remove(0);
+
                     Variable x = call.getCallSite().getReceiver();
                     GetMethod getMethod = m.getReflectMethod(x);
 
                     if (getMethod != null) {
-
-//                        Variable x1 = m.getVariable(getMethod.getInvokeBase());
-//
-//                        Var var = PFG.getVar(x1);
-//
-//                        //TODO
-//
-//                        CallSite callSite;
-//
-//                        if (call instanceof AssignStmt && ((AssignStmt) call).getLeftOp() instanceof Local) {
-//                            // r = x.k(arg, ...)
-//                            Variable r = m.getVariable((Local) ((AssignStmt) call).getLeftOp());
-//                            // TODO: x = ?
-//                            AssignStmt assignStmt = new JAssignStmt(
-//                                    ((AssignStmt) call).getLeftOp(),
-//                                    getMethod.getinvoke()
-//                            );
-//                            callSite = new CallSite(assignStmt, x1, r);
-//
-//                        } else {
-//                            // x.k(arg, ...)
-//                            InvokeStmt invokeStmt = new JInvokeStmt(getMethod.getinvoke());
-//                            callSite = new CallSite(invokeStmt, x1);
-//                        }
-
-//                        for (Obj o: var.getPointsToSet()) {
-//                            Method dispatch = dispatch(o, callSite);
-//
-//                            System.out.println(dispatch);
-//
-//                            if (!CG.contains(call.getCallSite().getCallSite(), dispatch.getSootMethod())) {
-//                                // add l -> m to CG
-//                                CG.addEdge(call.getCallSite().getCallSite(), dispatch.getSootMethod(), CallKind.getCallKind(call.getCallSite().getCallSite()));
-//
-//                                WL.addPointerEntry(PFG.getVar(m.getThisVariable()), PointsToSet.singleton(o));
-//                            }
-//                        }
-
-                        SootMethod dm = dispatch(getMethod.getBaseClass(), getMethod.getSootMethod());
-//                        Method method = null;
-//                        for (Method mm : RM) {
-//                            if (mm.getSootMethod() == dm) {
-//                                method = mm;
-//                                break;
-//                            }
-//                        }
-//                        if (method == null) {
-//                            method = new Method(dm);
-//                        }
-
-                        if (!CG.contains(call.getCallSite().getCallSite(), dm)) {
-                            // add l -> m to CG
-                            CG.addEdge(call.getCallSite().getCallSite(), dm, CallKind.getCallKind(call.getCallSite().getCallSite()));
+                        CallSite callSite;
+                        if (s instanceof AssignStmt && ((AssignStmt) s).getLeftOp() instanceof Local) {
+                            // r = x.k(arg, ...)
+                            Variable r = m.getVariable((Local) ((AssignStmt) s).getLeftOp());
+                            // TODO: x = ?
+                            AssignStmt assignStmt = new JAssignStmt(
+                                    ((AssignStmt) s).getLeftOp(),
+                                    getMethod.getInvoke()
+                            );
+                            callSite = new CallSite(assignStmt, instance, r);
+                        } else {
+                            // x.k(arg, ...)
+                            InvokeStmt invokeStmt = new JInvokeStmt(getMethod.getInvoke());
+                            callSite = new CallSite(invokeStmt, instance);
                         }
+
+                        Call newCall = new Call(callSite);
+                        newCall.setEnclosingMethod(m);
+                        newCall.setLine(call.getLine());
+
+                        instance.getCalls().add(newCall);
+
+
+                        // invoke call target method
+
+                        if (InvokeCallFrom.containsKey(newCall)) {
+                            InvokeCallFrom.get(newCall).add(call.getCallSite());
+                        }
+                        else {
+                            Set<CallSite> callSiteSet = new HashSet<>();
+                            callSiteSet.add(call.getCallSite());
+                            InvokeCallFrom.put(newCall, callSiteSet);
+                        }
+
+
+//                        SootMethod dm = dispatch(getMethod.getBaseClass(), getMethod.getSootMethod());
+//
+//                        if (!CG.contains(call.getCallSite().getCallSite(), dm)) {
+//                            // add l -> m to CG
+//                            CG.addEdge(call.getCallSite().getCallSite(), dm, CallKind.getCallKind(call.getCallSite().getCallSite()));
+//                        }
 
                     }
             });
     }
-
 
     /**
      * 处理函数调用，型如：l: r = var.k(a1, ..., an)
@@ -430,6 +428,9 @@ public class PointerAnalysis {
 
         Set<Call> calls = var.getVariable().getCalls();
         for (Call call : calls) {
+
+//            System.out.println(var + "\t" + "\t" + call);
+
             // r = var.k(a1, ..., an)
             CallSite callSite = call.getCallSite();
 
@@ -439,35 +440,71 @@ public class PointerAnalysis {
             // add <m_this, {o_i}> to WL
             WL.addPointerEntry(PFG.getVar(m.getThisVariable()), PointsToSet.singleton(o));
 
-            // if l -> m not in CG
-            if (!CG.contains(callSite.getCallSite(), m.getSootMethod())) {
-                // add l -> m to CG
-                CG.addEdge(callSite.getCallSite(), m.getSootMethod(), CallKind.getCallKind(callSite.getCallSite()));
+            if (InvokeCallFrom.containsKey(call)) {
+                for (CallSite invokeFrom: InvokeCallFrom.get(call)) {
+                    if (!CG.contains(invokeFrom.getCallSite(), m.getSootMethod())) {
+                        // add l -> m to CG
+                        CG.addEdge(invokeFrom.getCallSite(), m.getSootMethod(), CallKind.getCallKind(invokeFrom.getCallSite()));
 
-                addReachable(m);
+                        addReachable(m);
 
-                // foreach parameter p_i of m do
-                //   AddEdge(a_i, p_i)
-                InvokeExpr invoke = callSite.getCallSite().getInvokeExpr();
-                for (int i = 0; i < m.getParams().size(); i++) {
-                    Local arg = (Local) invoke.getArg(i);
-                    Variable argVariable = curMethod.getVariable(arg);
+                        // foreach parameter p_i of m do
+                        //   AddEdge(a_i, p_i)
+                        InvokeExpr invoke = invokeFrom.getCallSite().getInvokeExpr();
+                        for (int i = 0; i < m.getParams().size(); i++) {
+                            // 第一个参数为实例类型
+                            Local arg = (Local) invoke.getArg(i+1);
+                            Variable argVariable = curMethod.getVariable(arg);
 
-                    Variable paramVariable = m.getParams().get(i);
+                            Variable paramVariable = m.getParams().get(i);
 
-                    addPFGEdge(PFG.getVar(argVariable), PFG.getVar(paramVariable));
-                }
+                            addPFGEdge(PFG.getVar(argVariable), PFG.getVar(paramVariable));
+                        }
 
-                // AddEdge(m_ret, r)
-                Variable callerRetVar = callSite.getRet();
-                if (callerRetVar != null) {
-                    List<Variable> calleeRetVariableList = m.getRetVariable();
-                    for (Variable calleeRetVar : calleeRetVariableList) {
-                        addPFGEdge(PFG.getVar(calleeRetVar), PFG.getVar(callerRetVar));
+                        // AddEdge(m_ret, r)
+                        Variable callerRetVar = invokeFrom.getRet();
+                        if (callerRetVar != null) {
+                            List<Variable> calleeRetVariableList = m.getRetVariable();
+                            for (Variable calleeRetVar : calleeRetVariableList) {
+                                addPFGEdge(PFG.getVar(calleeRetVar), PFG.getVar(callerRetVar));
+                            }
+                        }
+
+                        processCallLink(curMethod, m, invokeFrom);
                     }
                 }
+            }
+            else {
+                // if l -> m not in CG
+                if (!CG.contains(callSite.getCallSite(), m.getSootMethod())) {
+                    // add l -> m to CG
+                    CG.addEdge(callSite.getCallSite(), m.getSootMethod(), CallKind.getCallKind(callSite.getCallSite()));
 
-                processCallLink(curMethod, m, callSite);
+                    addReachable(m);
+
+                    // foreach parameter p_i of m do
+                    //   AddEdge(a_i, p_i)
+                    InvokeExpr invoke = callSite.getCallSite().getInvokeExpr();
+                    for (int i = 0; i < m.getParams().size(); i++) {
+                        Local arg = (Local) invoke.getArg(i);
+                        Variable argVariable = curMethod.getVariable(arg);
+
+                        Variable paramVariable = m.getParams().get(i);
+
+                        addPFGEdge(PFG.getVar(argVariable), PFG.getVar(paramVariable));
+                    }
+
+                    // AddEdge(m_ret, r)
+                    Variable callerRetVar = callSite.getRet();
+                    if (callerRetVar != null) {
+                        List<Variable> calleeRetVariableList = m.getRetVariable();
+                        for (Variable calleeRetVar : calleeRetVariableList) {
+                            addPFGEdge(PFG.getVar(calleeRetVar), PFG.getVar(callerRetVar));
+                        }
+                    }
+
+                    processCallLink(curMethod, m, callSite);
+                }
             }
         }
     }

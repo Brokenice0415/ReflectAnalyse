@@ -27,6 +27,8 @@ public class Statement {
         this.line = line;
     }
 
+    public int getLine() {return line;}
+
     @Override
     public String toString() {
         StringBuilder buff = new StringBuilder();
