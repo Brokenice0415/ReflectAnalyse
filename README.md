@@ -36,7 +36,7 @@ using ideaJ
 ```shell
 > mvn clean install
 ```
-then run `src/test/java/reflect/pta/PointerAnalysis.java` in ideaJ with Junit\
+then run `src/test/java/reflect/pta/PointerAnalysisTest.java` in ideaJ with Junit\
 program will print PFG and CG of target code on terminal\
 \
 IMPORTANT: \
