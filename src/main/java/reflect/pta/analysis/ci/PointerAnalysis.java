@@ -11,6 +11,7 @@ import soot.jimple.*;
 import soot.jimple.internal.JAssignStmt;
 import soot.jimple.internal.JInvokeStmt;
 import soot.jimple.toolkits.callgraph.CallGraph;
+import soot.jimple.toolkits.ide.icfg.OnTheFlyJimpleBasedICFG;
 import soot.toolkits.scalar.Pair;
 
 import java.util.*;
@@ -116,10 +117,14 @@ public class PointerAnalysis {
             Set<Statement> S_m = m.getStatements();
             S.addAll(S_m);
 
-//            for (Statement st: S_m) {
-//                System.out.println(st.toString());
+//            if (m.getSootMethod() != null) {
+//                System.out.println("=== " + m.getSootMethod().getName() + " ===");
+//                for (Statement st: S_m) {
+//                    System.out.println(st.toString());
+//                }
+//                System.out.println("\n");
 //            }
-//            System.out.println("====");
+
 
             // foreach i: x = new T() \in S_m
             processAllocations(m);
@@ -248,6 +253,21 @@ public class PointerAnalysis {
                             Obj o = heapModel.getObj(allocation.getAllocationSite(), classType, m);
                             WL.addPointerEntry(PFG.getVar(call.getCallSite().getRet()), PointsToSet.singleton(o));
                         }
+                        else if (staticCall.getArg(0) instanceof Local) {
+                            Local className = (Local) staticCall.getArg(0);
+                            if ("java.lang.String".equals(className.getType().toString())) {
+                                // TODO:过程间常量传播结果
+//                                String classType = m.getIn(className, call.getCallSite().getCallSite());
+//
+//                                System.out.println(call.getCallSite().getCallSite());
+//
+//                                System.out.println(classType);
+
+//                                Allocation allocation = new Allocation(call.getCallSite().getRet(), classType);
+//                                Obj o = heapModel.getObj(allocation.getAllocationSite(), classType, m);
+//                                WL.addPointerEntry(PFG.getVar(call.getCallSite().getRet()), PointsToSet.singleton(o));
+                            }
+                        }
                     }
                     else { // normal static method
                         // 被调用函数 (不需要Dispatch, 静态可知)
@@ -351,6 +371,7 @@ public class PointerAnalysis {
         }
     }
 
+
     protected void processInvoke(final Method m) {
         Set<Statement> S_m = m.getStatements();
         S_m.stream()
@@ -405,6 +426,9 @@ public class PointerAnalysis {
                             InvokeCallFrom.put(newCall, callSiteSet);
                         }
 
+                        // 加被调用方法的this -> instance的pfg边
+                        addPFGEdge(PFG.getVar(new Method(getMethod.getSootMethod()).getThisVariable()), instanceVar);
+
 
 //                        SootMethod dm = dispatch(getMethod.getBaseClass(), getMethod.getSootMethod());
 //
@@ -412,7 +436,6 @@ public class PointerAnalysis {
 //                            // add l -> m to CG
 //                            CG.addEdge(call.getCallSite().getCallSite(), dm, CallKind.getCallKind(call.getCallSite().getCallSite()));
 //                        }
-
                     }
             });
     }
@@ -486,7 +509,7 @@ public class PointerAnalysis {
                     //   AddEdge(a_i, p_i)
                     InvokeExpr invoke = callSite.getCallSite().getInvokeExpr();
                     for (int i = 0; i < m.getParams().size(); i++) {
-                        Local arg = (Local) invoke.getArg(i);
+                        Value arg = invoke.getArg(i);
                         Variable argVariable = curMethod.getVariable(arg);
 
                         Variable paramVariable = m.getParams().get(i);
