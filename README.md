@@ -26,18 +26,15 @@
 
 ### Dependency
 
-- jdk1.8 or higher
+- jdk1.8
 - maven3.8.1 or higher
 - soot4.2.1
 - junit
 
 ### Test
-using ideaJ
-```shell
-> mvn clean install
-```
-then run `src/test/java/reflect/pta/PointerAnalysisTest.java` in ideaJ with Junit\
-program will print PFG and CG of target code on terminal\
-\
 IMPORTANT: \
 target code: any `.java` in dir `src/test/testcodes/reflect`, user should mark this dir `Test Sources Root` by ideaJ.
+
+then run `src/test/java/reflect/pta/PointerAnalysisTest.java` in ideaJ with Junit\
+program will print PFG and CG of target code on terminal\
+
